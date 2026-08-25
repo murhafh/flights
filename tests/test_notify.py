@@ -271,3 +271,28 @@ def test_send_failure_surfaces_telegram_description() -> None:
     )
     with pytest.raises(NotifierError, match="chat not found"):
         notifier.send([make_deal()])
+
+
+def test_alert_body_has_no_dangling_blank_line_without_links() -> None:
+    """Links off must not leave ragged formatting behind."""
+    body = format_deals_text([make_deal(booking_url=""), make_deal(booking_url="")])
+    assert "http" not in body
+    assert "\n\n  -" not in body  # no blank line wedged between deals
+
+
+def test_slack_block_omits_the_button_without_a_link() -> None:
+    import json
+    import os
+
+    import respx as _respx
+
+    from flightwatch.notify.slack import SlackNotifier
+
+    os.environ["_SLACK_WH"] = "https://hooks.slack.com/services/T0/B0/x"
+    with _respx.mock:
+        route = _respx.post("https://hooks.slack.com/services/T0/B0/x").mock(
+            return_value=httpx.Response(200, text="ok")
+        )
+        SlackNotifier(webhook_url_env="_SLACK_WH").send([make_deal(booking_url="")])
+        blocks = json.loads(route.calls[0].request.content)["blocks"]
+    assert not any("accessory" in b for b in blocks), "button rendered without a URL"

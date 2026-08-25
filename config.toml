@@ -11,11 +11,11 @@ kind = "seats_aero"
 api_key_env = "SEATS_AERO_API_KEY"
 requests_per_minute = 60
 taxes_in_cents = true
-# A real seats.aero UI URL with only route and date substituted, params in original
-# order. Trimming the ones that look irrelevant makes the page load without running the
-# search. max_fees is raised from 40000 ($400) so the link can't filter out the very
-# award being alerted.
-booking_url_template = "https://seats.aero/search?min_seats=1&applicable_cabin=any&additional_days=true&additional_days_num=7&max_fees=999999&disable_live_filtering=true&date={date}&origins={origin}&destinations={destination}&view=default"
+# Links are disabled: an empty template makes every notifier omit the link entirely
+# rather than print a dead one. The /search URL populated the cities but never ran the
+# search, and the app only deep-links /i/* paths whose format we could not determine.
+# Restore by putting the seats.aero URL back here.
+booking_url_template = ""
 
 [dedupe]
 cooldown_days = 3

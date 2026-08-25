@@ -215,8 +215,11 @@ with no channel covering it will resurface every single run until one exists.
 
 ### Booking links
 
-`provider.booking_url_template` controls the link in alerts. The default is a real
-seats.aero UI URL with only the route and date substituted:
+`provider.booking_url_template` controls the link in alerts. **It is currently set to
+`""`, which disables links entirely** — every notifier omits the link rather than
+printing one that doesn't work.
+
+To turn links back on, put a URL back in the template:
 
 ```toml
 booking_url_template = "https://seats.aero/search?min_seats=1&applicable_cabin=any&additional_days=true&additional_days_num=7&max_fees=999999&disable_live_filtering=true&date={date}&origins={origin}&destinations={destination}&view=default"
@@ -225,24 +228,19 @@ booking_url_template = "https://seats.aero/search?min_seats=1&applicable_cabin=a
 Supported placeholders: `{origin}`, `{destination}`, `{date}` (ISO), `{source}`,
 `{record_id}`.
 
-Three things learned the hard way, all of which produce a link that *looks* fine:
+Why they're off, and what to know before re-enabling:
 
-- **Keep every parameter.** Trimming the ones that look irrelevant
-  (`additional_days`, `disable_live_filtering`, `max_fees`) yields a page that loads
-  with the cities populated but never runs the search. The app seems to need the full
-  set to treat the URL as a complete search state.
+- The `/search` URL above **populates the origin and destination but never runs the
+  search**, so you land on an empty results page. Every parameter from a real UI URL is
+  present and in the original order; trimming any of them makes it worse, not better.
 - **The param names are plural** — `origins`/`destinations`. Singular names are ignored.
-- **`max_fees` filters the site's own results**, in cents. Left at the UI's default of
-  `40000` ($400), the link hides the very award being alerted whenever surcharges exceed
-  that — routine on Virgin Atlantic and British Airways transatlantic redemptions, which
-  run ~$710. It is deliberately set high here.
-
-There is no program parameter: seats.aero can't be deep-linked to a single mileage
-program, so the alert text carries the program name instead.
-
-An unsupported placeholder logs a warning and degrades to the bare URL rather than
-failing the run. When the template yields nothing usable, notifiers omit the link
-entirely instead of emitting a broken one.
+- **`max_fees` filters the site's own results**, in cents. At the UI default of `40000`
+  ($400) the link hides the very award being alerted whenever surcharges exceed that,
+  which is routine on Virgin Atlantic and British Airways.
+- **The iOS app only claims `/ioslogin/*` and `/i/*`** in its
+  `apple-app-site-association`, so a `/search` link can never open the app — it will
+  always land in the browser. A `/i/{record_id}` link might, but the format is
+  unconfirmed and the site blocks automated probing.
 
 ## Alerts
 

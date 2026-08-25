@@ -366,3 +366,14 @@ def test_bad_template_placeholder_degrades_instead_of_crashing() -> None:
     results = provider.search(QUERY)
     assert results
     assert results[0].booking_url == "https://seats.aero/search?x="
+
+
+@respx.mock
+def test_empty_template_disables_links_entirely() -> None:
+    """Setting booking_url_template = "" is how links get turned off. It must yield an
+    empty string, not a stray "https://" fragment, so notifiers omit the link."""
+    provider = SeatsAeroProvider(api_key="k", requests_per_minute=100_000, booking_url_template="")
+    respx.get(f"{BASE}/search").mock(
+        return_value=httpx.Response(200, json={"data": [RECORD], "hasMore": False})
+    )
+    assert all(a.booking_url == "" for a in provider.search(QUERY))
