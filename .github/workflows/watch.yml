@@ -1,0 +1,60 @@
+name: flightwatch
+
+on:
+  schedule:
+    # Every 30 minutes. GitHub's scheduler is best-effort and commonly runs late,
+    # sometimes by 10-30 minutes under load, so treat this as "roughly half-hourly".
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Find deals but send nothing and record nothing"
+        type: boolean
+        default: false
+
+# Overlapping runs would race on the dedupe state and could double-alert. Queue rather
+# than cancel, so a long run doesn't lose its state save.
+concurrency:
+  group: flightwatch
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      # Dedupe state has to survive between runs or every run re-alerts everything.
+      # The key rotates per run because cache entries are immutable; restore-keys picks
+      # up the most recent previous one.
+      - name: Restore dedupe state
+        uses: actions/cache/restore@v4
+        with:
+          path: state.db
+          key: flightwatch-state-${{ github.run_id }}
+          restore-keys: |
+            flightwatch-state-
+
+      - name: Watch
+        env:
+          SEATS_AERO_API_KEY: ${{ secrets.SEATS_AERO_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          uv run flightwatch watch --config config.toml \
+            ${{ inputs.dry_run && '--dry-run' || '' }}
+
+      # Runs even when the watch step failed: whatever was delivered was recorded, and
+      # losing that would mean re-alerting it next run.
+      - name: Save dedupe state
+        if: ${{ !cancelled() }}
+        uses: actions/cache/save@v4
+        with:
+          path: state.db
+          key: flightwatch-state-${{ github.run_id }}

@@ -1,0 +1,83 @@
+# Example configuration. Copy to ~/.config/flightwatch/config.toml, or generate a
+# starter with `flightwatch init`. Validate edits with `flightwatch check`.
+
+state_path = "~/.local/state/flightwatch/state.db"
+
+[provider]
+kind = "seats_aero"              # or "mock" for deterministic sample data
+api_key_env = "SEATS_AERO_API_KEY"
+requests_per_minute = 60         # keep at or below your plan's rate limit
+taxes_in_cents = false           # set true if `probe` shows taxes 100x too large
+
+[dedupe]
+cooldown_days = 3                # re-alert an unchanged award after this long (0 = never)
+realert_on_improvement = 5000    # ...or immediately if it drops this many miles
+
+[[notify]]
+kind = "console"
+
+# [[notify]]
+# kind = "telegram"
+# bot_token_env = "TELEGRAM_BOT_TOKEN"
+# chat_id_env = "TELEGRAM_CHAT_ID"
+
+# [[notify]]
+# kind = "slack"
+# webhook_url_env = "SLACK_WEBHOOK_URL"
+
+# [[notify]]
+# kind = "email"
+# host = "smtp.gmail.com"
+# port = 587
+# sender = "you@gmail.com"
+# recipients = ["you@gmail.com"]
+# username_env = "SMTP_USERNAME"
+# password_env = "SMTP_PASSWORD"
+
+# A flexible-destination watch: any of these European cities counts.
+[[watch]]
+name = "West coast -> Europe, business"
+origins = ["SFO", "OAK", "SJC"]
+destinations = ["LHR", "CDG", "AMS", "FRA", "MAD", "LIS"]
+programs = ["aeroplan", "flyingblue", "virginatlantic"]
+depart_after = "+21d"
+depart_before = "+300d"
+
+  [[watch.thresholds]]
+  cabin = "business"
+  max_miles = 70000
+  max_taxes = 150
+  min_seats = 2
+
+# Two cabins on one route, each with its own bar.
+[[watch]]
+name = "Asia, business or a first-class splurge"
+origins = ["SFO", "LAX"]
+destinations = ["HND", "NRT", "SIN", "BKK", "HKG"]
+depart_after = "+30d"
+depart_before = "+330d"
+
+  [[watch.thresholds]]
+  cabin = "business"
+  max_miles = 75000
+
+  [[watch.thresholds]]
+  cabin = "first"
+  max_miles = 120000
+  min_seats = 1
+
+# A narrow, high-conviction watch: nonstop only, low surcharges, specific dates.
+[[watch]]
+name = "Spring break Tokyo, nonstop"
+origins = ["SFO"]
+destinations = ["HND"]
+depart_after = "2027-03-13"
+depart_before = "2027-03-22"
+airlines_exclude = []
+
+  [[watch.thresholds]]
+  cabin = "business"
+  max_miles = 90000
+  max_taxes = 100
+  min_seats = 2
+  nonstop_only = true
