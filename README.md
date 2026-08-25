@@ -117,6 +117,21 @@ the same route-day. Both are evaluated, then collapsed to a single alert — the
 cheapest one, preferring nonstop on a tie — so one piece of award space never
 produces two notifications.
 
+### Pausing a watch
+
+```toml
+[[watch]]
+name = "..."
+enabled = false
+```
+
+A paused watch is skipped before any search runs, so it costs no API calls. Its alert
+history is kept, so re-enabling it does not replay deals you were already told about.
+`flightwatch check` shows paused watches and warns if every watch is off.
+
+Notifiers scoped to a paused watch stay valid, so you can pause and resume without
+touching the `notify` blocks.
+
 ### Return trips
 
 Add `return_trip` to pair each qualifying outbound with a return leg:

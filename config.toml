@@ -60,6 +60,7 @@ return_trip = { min_days = 7, max_days = 14 }
 # routings via London -- remove that line to see every match.
 [[watch]]
 name = "SFO -> Dublin, business, any program"
+enabled = false   # paused: console-only, so it never reached Telegram anyway
 origins = ["SFO"]
 destinations = ["DUB"]
 depart_after = "+21d"
@@ -91,6 +92,7 @@ return_trip = { min_days = 7, max_days = 14 }
 
 [[watch]]
 name = "SFO -> London, business, any program"
+enabled = false   # paused: console-only, so it never reached Telegram anyway
 origins = ["SFO"]
 destinations = ["LON"]
 depart_after = "+21d"

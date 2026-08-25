@@ -147,6 +147,9 @@ def run_once(
 
     try:
         for watch in config.watch:
+            if not watch.enabled:
+                log.info("%s: paused (enabled = false), skipping", watch.name)
+                continue
             try:
                 availabilities = search_watch(provider, watch, today=today)
             except ProviderError as exc:

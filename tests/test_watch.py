@@ -465,3 +465,96 @@ def test_notifier_scoped_to_a_real_watch_is_accepted() -> None:
 
 def test_unscoped_notifier_needs_no_watch_names() -> None:
     assert two_watch_config().notify[0].watches == []
+
+
+def test_paused_watch_is_not_searched(store: Store) -> None:
+    """A paused watch must cost nothing: no API call, no records, no deals."""
+    config = make_config(
+        watch=[
+            {
+                "name": "paused",
+                "origins": ["SFO"],
+                "destinations": ["LHR"],
+                "enabled": False,
+                "thresholds": [{"cabin": "business", "max_miles": 200_000}],
+            }
+        ]
+    )
+    result = run_once(
+        config,
+        provider=ExplodingProvider(),
+        store=store,
+        notifiers=[RecordingNotifier()],
+        today=TODAY,
+    )
+    # ExplodingProvider would raise if it were called at all.
+    assert result.ok
+    assert result.searched == 0
+    assert result.matched == []
+
+
+def test_paused_watch_does_not_block_active_ones(store: Store) -> None:
+    notifier = RecordingNotifier()
+    config = make_config(
+        watch=[
+            {
+                "name": "paused",
+                "origins": ["JFK"],
+                "destinations": ["CDG"],
+                "enabled": False,
+                "thresholds": [{"cabin": "business", "max_miles": 200_000}],
+            },
+            {
+                "name": "active",
+                "origins": ["SFO"],
+                "destinations": ["LHR"],
+                "thresholds": [{"cabin": "business", "max_miles": 200_000}],
+            },
+        ]
+    )
+    result = run_once(
+        config, provider=MockProvider(), store=store, notifiers=[notifier], today=TODAY
+    )
+    assert result.alerted
+    assert {deal.watch_name for deal in result.alerted} == {"active"}
+
+
+def test_watches_are_enabled_by_default(store: Store) -> None:
+    assert all(watch.enabled for watch in make_config().watch)
+
+
+def test_pausing_preserves_alert_history(store: Store) -> None:
+    """Re-enabling a watch must not replay deals already alerted, so history is kept."""
+    active = make_config()
+    first = run_once(
+        active,
+        provider=MockProvider(),
+        store=store,
+        notifiers=[RecordingNotifier()],
+        today=TODAY,
+    )
+    assert first.alerted
+
+    paused = make_config()
+    paused.watch[0].enabled = False
+    run_once(
+        paused, provider=MockProvider(), store=store, notifiers=[RecordingNotifier()], today=TODAY
+    )
+
+    resumed = run_once(
+        make_config(),
+        provider=MockProvider(),
+        store=store,
+        notifiers=[RecordingNotifier()],
+        today=TODAY,
+    )
+    assert resumed.alerted == []
+
+
+def test_notifier_may_reference_a_paused_watch() -> None:
+    """Pausing a watch must not invalidate a notifier scoped to it."""
+    config = make_config(
+        notify=[{"kind": "console", "watches": ["Europe business"]}],
+    )
+    config.watch[0].enabled = False
+    assert config.notify[0].watches == ["Europe business"]

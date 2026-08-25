@@ -144,11 +144,20 @@ def check(config_path: Path) -> None:
     for watch in config.watch:
         after, before = watch.window()
         cabins = ", ".join(f"{threshold.describe()}" for threshold in watch.thresholds)
+        if not watch.enabled:
+            console.print(f"  [dim]{watch.name}: PAUSED (enabled = false)[/dim]")
+            continue
         console.print(
             f"  [bold]{watch.name}[/bold]: "
             f"{len(watch.origins)}x{len(watch.destinations)} O&Ds, "
             f"{after} to {before} ({(before - after).days}d) | {cabins}"
         )
+
+    active = sum(1 for watch in config.watch if watch.enabled)
+    if active < len(config.watch):
+        console.print(f"[dim]{active} of {len(config.watch)} watches active[/dim]")
+    if active == 0:
+        err_console.print("[red]![/red] Every watch is paused; nothing will be searched.")
 
     problems: list[str] = []
     if config.provider.kind == "seats_aero" and not config.provider.api_key():

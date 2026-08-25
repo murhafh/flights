@@ -115,6 +115,10 @@ class Watch(BaseModel):
     origins: list[str] = Field(min_length=1)
     destinations: list[str] = Field(min_length=1)
     thresholds: list[Threshold] = Field(min_length=1)
+    enabled: bool = True
+    """Set false to pause a watch without deleting it. Paused watches are not searched
+    at all, so they cost no API calls, and their alert history is kept -- re-enabling
+    won't replay deals you've already been told about."""
     programs: list[str] = Field(default_factory=list)
     depart_after: str = "+1d"
     depart_before: str = "+330d"
