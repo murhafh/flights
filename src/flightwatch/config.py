@@ -81,7 +81,16 @@ class Threshold(BaseModel):
         return miles < self.limit if self.strict else miles <= self.limit
 
     def describe(self) -> str:
-        return f"{self.cabin.label} {'<' if self.strict else '<='} {self.limit:,}"
+        parts = [f"{self.cabin.label} {'<' if self.strict else '<='} {self.limit:,}"]
+        # Surfaced in `check` because a restrictive filter that silently matches nothing
+        # is indistinguishable from "no award space".
+        if self.nonstop_only:
+            parts.append("nonstop only")
+        if self.max_taxes is not None:
+            parts.append(f"taxes <= {self.max_taxes:,.0f}")
+        if self.min_seats > 1:
+            parts.append(f"{self.min_seats}+ seats")
+        return ", ".join(parts)
 
 
 class ReturnTrip(BaseModel):

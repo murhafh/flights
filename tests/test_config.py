@@ -165,6 +165,25 @@ def test_describe_shows_which_comparison_applies() -> None:
     assert Threshold(cabin=Cabin.BUSINESS, under_miles=80_000).describe() == "Business < 80,000"
 
 
+def test_describe_surfaces_restrictive_filters() -> None:
+    """`check` is how you confirm config; a filter that silently matches nothing must
+    be visible there rather than looking like an absence of award space."""
+    described = Threshold(
+        cabin=Cabin.BUSINESS,
+        max_miles=80_000,
+        nonstop_only=True,
+        max_taxes=50,
+        min_seats=2,
+    ).describe()
+    assert "nonstop only" in described
+    assert "taxes <= 50" in described
+    assert "2+ seats" in described
+
+
+def test_describe_stays_terse_without_extra_filters() -> None:
+    assert Threshold(cabin=Cabin.FIRST, max_miles=120_000).describe() == "First <= 120,000"
+
+
 def test_under_miles_parses_from_toml(tmp_path) -> None:
     path = tmp_path / "config.toml"
     path.write_text(

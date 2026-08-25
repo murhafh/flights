@@ -29,7 +29,7 @@ chat_id_env = "TELEGRAM_CHAT_ID"
 watches = [
   "SFO -> Dublin, business, Chase-transferable",
   "SFO -> London, business, Chase-transferable",
-  "SFO -> Frankfurt, business, Chase-transferable",
+  "SFO -> Frankfurt, business, Chase-transferable, nonstop",
 ]
 
 # Unscoped, so the non-Chase watches still reach a channel and get recorded. In CI this
@@ -111,7 +111,7 @@ return_trip = { min_days = 7, max_days = 14 }
 # FRA->LEJ has plenty of onward award space, so Frankfurt works as a connection point.
 
 [[watch]]
-name = "SFO -> Frankfurt, business, Chase-transferable"
+name = "SFO -> Frankfurt, business, Chase-transferable, nonstop"
 origins = ["SFO"]
 destinations = ["FRA"]
 programs = ["@chase"]
@@ -122,3 +122,6 @@ return_trip = { min_days = 7, max_days = 14 }
   [[watch.thresholds]]
   cabin = "business"
   max_miles = 80000
+  # Nonstop only. Note the return leg is held to the same rule, so a paired return
+  # must also be nonstop. Drop this line to accept connections again.
+  nonstop_only = true
