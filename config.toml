@@ -29,6 +29,7 @@ chat_id_env = "TELEGRAM_CHAT_ID"
 watches = [
   "SFO -> Dublin, business, Chase-transferable",
   "SFO -> London, business, Chase-transferable",
+  "SFO -> Frankfurt, business, Chase-transferable",
 ]
 
 # Unscoped, so the non-Chase watches still reach a channel and get recorded. In CI this
@@ -103,3 +104,21 @@ return_trip = { min_days = 7, max_days = 14 }
   cabin = "business"
   max_miles = 80000
   max_taxes = 50
+
+# --- Frankfurt ---------------------------------------------------------------
+# Added as the practical way to reach Leipzig: there is no SFO->LEJ award space at all
+# (Leipzig has no long-haul service and seats.aero does not build that O&D), but
+# FRA->LEJ has plenty of onward award space, so Frankfurt works as a connection point.
+
+[[watch]]
+name = "SFO -> Frankfurt, business, Chase-transferable"
+origins = ["SFO"]
+destinations = ["FRA"]
+programs = ["@chase"]
+depart_after = "+21d"
+depart_before = "+330d"
+return_trip = { min_days = 7, max_days = 14 }
+
+  [[watch.thresholds]]
+  cabin = "business"
+  max_miles = 80000
