@@ -213,6 +213,28 @@ reaches no channel is *not* recorded as seen, and the run reports how many were
 dropped and from which watches. That prevents silent loss, but it also means a deal
 with no channel covering it will resurface every single run until one exists.
 
+### When a channel fails
+
+A deal is recorded as seen once a channel that **counts as delivery** accepts it. If
+every counting channel fails, the deal is not recorded and resurfaces next run, so a
+transient outage costs you a delay rather than the alert.
+
+```toml
+[[notify]]
+kind = "console"
+counts_as_delivery = false   # this channel is an echo, not a delivery guarantee
+```
+
+Set `counts_as_delivery = false` for any channel nobody actually reads — notably
+`console` under cron or CI, where output goes to a log file. This is not theoretical: on
+2026-09-04 a Telegram send timed out, the console channel wrote to the Actions log and
+reported success, and the deal was recorded as delivered. It stayed suppressed for the
+full 3-day cooldown and the notification was simply lost.
+
+Telegram sends also retry on read timeouts, network faults, `5xx` and `429` (honouring
+the server's `retry_after`). A `4xx` such as *chat not found* is a configuration problem
+retrying cannot fix, so it fails immediately with the API's own explanation.
+
 ### Booking links
 
 `provider.booking_url_template` controls the link in alerts. **It is currently set to

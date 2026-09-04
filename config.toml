@@ -32,11 +32,13 @@ watches = [
   "SFO -> Frankfurt, business, Chase-transferable, nonstop",
 ]
 
-# Unscoped, so the non-Chase watches still reach a channel and get recorded. In CI this
-# only lands in the Actions run log -- widen the telegram `watches` list above if you
-# want those on your phone too.
+# Unscoped echo of every deal into the Actions run log, useful for debugging.
+# counts_as_delivery = false because nobody reads that log: if it counted, a successful
+# console write would mask a failed Telegram send and suppress the alert for the whole
+# cooldown. That happened on 2026-09-04 and cost a real notification.
 [[notify]]
 kind = "console"
+counts_as_delivery = false
 
 # --- Dublin -----------------------------------------------------------------
 # Listed first so an award matching both watches is attributed to this one.

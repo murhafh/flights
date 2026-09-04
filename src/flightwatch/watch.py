@@ -91,7 +91,10 @@ def _deliver(channels: list[Channel], deals: list[Deal], errors: list[str]) -> s
             log.exception("Notifier %s raised unexpectedly", channel.name)
             errors.append(f"{channel.name}: unexpected error: {exc}")
         else:
-            delivered.update(deal.availability.key for deal in batch)
+            # A channel nobody reads must not mark a deal as delivered, or its success
+            # masks a real failure elsewhere and suppresses the alert for the cooldown.
+            if channel.counts_as_delivery:
+                delivered.update(deal.availability.key for deal in batch)
 
     undelivered = [deal for deal in deals if deal.availability.key not in delivered]
     if undelivered:

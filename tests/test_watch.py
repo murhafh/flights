@@ -558,3 +558,57 @@ def test_notifier_may_reference_a_paused_watch() -> None:
     )
     config.watch[0].enabled = False
     assert config.notify[0].watches == ["Europe business"]
+
+
+def test_unread_channel_does_not_mask_a_real_failure(store: Store) -> None:
+    """Production regression: Telegram timed out, console 'succeeded', and the deal was
+    recorded as sent -- suppressing it for the full 3-day cooldown. A channel marked
+    counts_as_delivery=False must not absorb the failure."""
+    console = RecordingNotifier()
+    config = make_config()
+    first = run_once(
+        config,
+        provider=MockProvider(),
+        store=store,
+        notifiers=[
+            Channel(notifier=BrokenNotifier()),  # stands in for Telegram
+            Channel(notifier=console, counts_as_delivery=False),  # the unread log
+        ],
+        today=TODAY,
+    )
+    assert first.alerted == [], "an unread channel marked the deal as delivered"
+    assert first.errors
+    assert console.batches, "the unread channel should still print"
+
+    # Next run, with a working channel, the deal is still available to send.
+    working = RecordingNotifier()
+    second = run_once(
+        config, provider=MockProvider(), store=store, notifiers=[working], today=TODAY
+    )
+    assert second.alerted
+    assert working.batches
+
+
+def test_counting_channel_still_records(store: Store) -> None:
+    working = RecordingNotifier()
+    result = run_once(
+        make_config(),
+        provider=MockProvider(),
+        store=store,
+        notifiers=[
+            Channel(notifier=working),
+            Channel(notifier=RecordingNotifier(), counts_as_delivery=False),
+        ],
+        today=TODAY,
+    )
+    assert result.alerted
+
+
+def test_counts_as_delivery_defaults_true() -> None:
+    config = make_config(notify=[{"kind": "console"}])
+    assert config.notify[0].counts_as_delivery is True
+
+
+def test_counts_as_delivery_parses_from_config() -> None:
+    config = make_config(notify=[{"kind": "console", "counts_as_delivery": False}])
+    assert config.notify[0].counts_as_delivery is False

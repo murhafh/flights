@@ -213,6 +213,15 @@ class _NotifierBase(BaseModel):
     genuinely care about reaches your inbox. Names are validated against the configured
     watches at load time, so a rename can't silently disable a channel.
     """
+    counts_as_delivery: bool = True
+    """Whether a successful send here means the deal has reached you.
+
+    Set false for a channel nobody actually reads -- notably `console` under cron or CI,
+    where output goes to a log file. It matters because a deal is recorded as seen when
+    any counting channel succeeds: an unread console reporting success will mask a real
+    Telegram failure and suppress the alert for the whole cooldown. That happened once
+    in production and cost a genuine notification.
+    """
 
 
 class ConsoleNotifier(_NotifierBase):

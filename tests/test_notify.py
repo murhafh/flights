@@ -296,3 +296,91 @@ def test_slack_block_omits_the_button_without_a_link() -> None:
         SlackNotifier(webhook_url_env="_SLACK_WH").send([make_deal(booking_url="")])
         blocks = json.loads(route.calls[0].request.content)["blocks"]
     assert not any("accessory" in b for b in blocks), "button rendered without a URL"
+
+
+def test_telegram_retries_a_read_timeout(monkeypatch) -> None:
+    """The exact production failure: one transient timeout must not lose the alert."""
+    import os
+
+    monkeypatch.setattr("flightwatch.notify.telegram.time.sleep", lambda _: None)
+    os.environ["_TG_T"] = "tok"
+    os.environ["_TG_C"] = "1"
+    notifier = TelegramNotifier(bot_token_env="_TG_T", chat_id_env="_TG_C")
+
+    with respx.mock:
+        route = respx.post(f"{TG}/bottok/sendMessage").mock(
+            side_effect=[
+                httpx.ReadTimeout("timed out"),
+                httpx.Response(200, json={"ok": True}),
+            ]
+        )
+        notifier.send([make_deal()])  # must not raise
+    assert route.call_count == 2
+
+
+def test_telegram_gives_up_after_retries(monkeypatch) -> None:
+    import os
+
+    monkeypatch.setattr("flightwatch.notify.telegram.time.sleep", lambda _: None)
+    os.environ["_TG_T"] = "tok"
+    os.environ["_TG_C"] = "1"
+    notifier = TelegramNotifier(bot_token_env="_TG_T", chat_id_env="_TG_C", max_retries=2)
+
+    with respx.mock:
+        respx.post(f"{TG}/bottok/sendMessage").mock(side_effect=httpx.ReadTimeout("nope"))
+        with pytest.raises(NotifierError, match="after retries"):
+            notifier.send([make_deal()])
+
+
+def test_telegram_does_not_retry_a_config_error(monkeypatch) -> None:
+    """'chat not found' is a 400 that retrying cannot fix; fail fast and say why."""
+    import os
+
+    monkeypatch.setattr("flightwatch.notify.telegram.time.sleep", lambda _: None)
+    os.environ["_TG_T"] = "tok"
+    os.environ["_TG_C"] = "1"
+    notifier = TelegramNotifier(bot_token_env="_TG_T", chat_id_env="_TG_C")
+
+    with respx.mock:
+        route = respx.post(f"{TG}/bottok/sendMessage").mock(
+            return_value=httpx.Response(400, json={"ok": False, "description": "chat not found"})
+        )
+        with pytest.raises(NotifierError, match="chat not found"):
+            notifier.send([make_deal()])
+    assert route.call_count == 1
+
+
+def test_telegram_retries_a_server_error(monkeypatch) -> None:
+    import os
+
+    monkeypatch.setattr("flightwatch.notify.telegram.time.sleep", lambda _: None)
+    os.environ["_TG_T"] = "tok"
+    os.environ["_TG_C"] = "1"
+    notifier = TelegramNotifier(bot_token_env="_TG_T", chat_id_env="_TG_C")
+
+    with respx.mock:
+        route = respx.post(f"{TG}/bottok/sendMessage").mock(
+            side_effect=[httpx.Response(502), httpx.Response(200, json={"ok": True})]
+        )
+        notifier.send([make_deal()])
+    assert route.call_count == 2
+
+
+def test_telegram_honours_rate_limit_retry_after(monkeypatch) -> None:
+    import os
+
+    slept: list[float] = []
+    monkeypatch.setattr("flightwatch.notify.telegram.time.sleep", slept.append)
+    os.environ["_TG_T"] = "tok"
+    os.environ["_TG_C"] = "1"
+    notifier = TelegramNotifier(bot_token_env="_TG_T", chat_id_env="_TG_C")
+
+    with respx.mock:
+        respx.post(f"{TG}/bottok/sendMessage").mock(
+            side_effect=[
+                httpx.Response(429, json={"ok": False, "parameters": {"retry_after": 7}}),
+                httpx.Response(200, json={"ok": True}),
+            ]
+        )
+        notifier.send([make_deal()])
+    assert 7.0 in slept, f"expected to wait the server-specified 7s, slept {slept}"

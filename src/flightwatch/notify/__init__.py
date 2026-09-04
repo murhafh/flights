@@ -42,6 +42,8 @@ class Channel:
     notifier: Notifier
     watches: frozenset[str] = field(default_factory=frozenset)
     """Empty means every watch."""
+    counts_as_delivery: bool = True
+    """False for channels nobody reads, so their success can't mask a real failure."""
 
     @property
     def name(self) -> str:
@@ -85,5 +87,11 @@ def build_notifiers(config: Config) -> list[Channel]:
                 )
             case _:  # pragma: no cover - pydantic's discriminator rejects this first
                 raise NotifierError(f"Unknown notifier kind {entry.kind!r}")
-        channels.append(Channel(notifier=notifier, watches=frozenset(entry.watches)))
+        channels.append(
+            Channel(
+                notifier=notifier,
+                watches=frozenset(entry.watches),
+                counts_as_delivery=entry.counts_as_delivery,
+            )
+        )
     return channels

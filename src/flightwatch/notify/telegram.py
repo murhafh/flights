@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import contextlib
+import logging
 import os
+import time
 
 import httpx
 
 from ..models import Deal
 from .base import NotifierError, format_deals_text, summarize
+
+log = logging.getLogger(__name__)
 
 TELEGRAM_LIMIT = 4096
 """Telegram rejects messages longer than this, so long batches are chunked."""
@@ -15,7 +19,14 @@ TELEGRAM_LIMIT = 4096
 class TelegramNotifier:
     name = "telegram"
 
-    def __init__(self, bot_token_env: str, chat_id_env: str, *, timeout: float = 15.0) -> None:
+    def __init__(
+        self,
+        bot_token_env: str,
+        chat_id_env: str,
+        *,
+        timeout: float = 15.0,
+        max_retries: int = 3,
+    ) -> None:
         self._token = os.environ.get(bot_token_env)
         self._chat_id = os.environ.get(chat_id_env)
         missing = [
@@ -28,6 +39,7 @@ class TelegramNotifier:
                 f"Telegram notifier needs {' and '.join('$' + name for name in missing)} set."
             )
         self._timeout = timeout
+        self._max_retries = max_retries
 
     def send(self, deals: list[Deal]) -> None:
         if not deals:
@@ -37,27 +49,60 @@ class TelegramNotifier:
             self._post(chunk)
 
     def _post(self, text: str) -> None:
-        try:
-            response = httpx.post(
-                f"{API_BASE}/bot{self._token}/sendMessage",
-                json={
-                    "chat_id": self._chat_id,
-                    "text": text,
-                    "disable_web_page_preview": True,
-                },
-                timeout=self._timeout,
-            )
-            response.raise_for_status()
-        except httpx.HTTPStatusError as exc:
-            # Telegram explains refusals in the body; a bare status code is useless here.
-            detail = ""
-            with contextlib.suppress(ValueError):
-                detail = f": {exc.response.json().get('description', '')}"
-            raise NotifierError(
-                f"Telegram delivery failed ({exc.response.status_code}){detail}"
-            ) from exc
-        except httpx.HTTPError as exc:
-            raise NotifierError(f"Telegram delivery failed: {exc}") from exc
+        """Send one message, retrying transient failures.
+
+        A single read timeout used to lose an alert outright: the send failed, another
+        channel had already succeeded, and the deal was recorded as seen -- so it stayed
+        suppressed for the whole cooldown. Transient network faults are common enough
+        (about 1 run in 60) to be worth retrying rather than dropping.
+        """
+        last_error: Exception | None = None
+
+        for attempt in range(self._max_retries + 1):
+            try:
+                response = httpx.post(
+                    f"{API_BASE}/bot{self._token}/sendMessage",
+                    json={
+                        "chat_id": self._chat_id,
+                        "text": text,
+                        "disable_web_page_preview": True,
+                    },
+                    timeout=self._timeout,
+                )
+            except (httpx.TimeoutException, httpx.NetworkError) as exc:
+                last_error = exc
+                log.warning("Telegram send failed (%s), attempt %d", exc, attempt + 1)
+            except httpx.HTTPError as exc:
+                # Anything else at the transport layer is unlikely to fix itself.
+                raise NotifierError(f"Telegram delivery failed: {exc}") from exc
+            else:
+                if response.status_code < 400:
+                    return
+
+                detail = ""
+                with contextlib.suppress(ValueError):
+                    detail = f": {response.json().get('description', '')}"
+
+                # 429 carries a server-specified wait; 5xx is worth another try. A 4xx
+                # like "chat not found" is a config error that retrying cannot fix.
+                if response.status_code != 429 and response.status_code < 500:
+                    raise NotifierError(
+                        f"Telegram delivery failed ({response.status_code}){detail}"
+                    )
+                last_error = NotifierError(
+                    f"Telegram delivery failed ({response.status_code}){detail}"
+                )
+                if response.status_code == 429:
+                    with contextlib.suppress(ValueError, AttributeError):
+                        retry_after = response.json()["parameters"]["retry_after"]
+                        log.warning("Telegram rate limited; waiting %ss", retry_after)
+                        time.sleep(min(float(retry_after), 30.0))
+                        continue
+
+            if attempt < self._max_retries:
+                time.sleep(2.0**attempt)
+
+        raise NotifierError(f"Telegram delivery failed after retries: {last_error}")
 
 
 def _chunk(text: str, limit: int) -> list[str]:
