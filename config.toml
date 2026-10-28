@@ -30,6 +30,7 @@ watches = [
   "SFO -> Dublin, business, Chase-transferable",
   "SFO -> London, business, Chase-transferable",
   "SFO -> Frankfurt, business, Chase-transferable, nonstop",
+  "LHR -> SFO, business, Chase-transferable",
 ]
 
 # Unscoped echo of every deal into the Actions run log, useful for debugging.
@@ -127,3 +128,19 @@ return_trip = { min_days = 7, max_days = 14 }
   # Nonstop only. Note the return leg is held to the same rule, so a paired return
   # must also be nonstop. Drop this line to accept connections again.
   nonstop_only = true
+
+# --- London -> SFO (one-way home) --------------------------------------------
+# Inbound one-way. No return_trip: the "return" would be another outbound to London,
+# which the SFO -> London watch already covers.
+
+[[watch]]
+name = "LHR -> SFO, business, Chase-transferable"
+origins = ["LHR"]
+destinations = ["SFO"]
+programs = ["@chase"]
+depart_after = "+21d"
+depart_before = "+330d"
+
+  [[watch.thresholds]]
+  cabin = "business"
+  max_miles = 80000
